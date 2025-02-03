@@ -46,8 +46,9 @@ namespace ESOLogs
         public void ReadFile(IEnumerable<string> logfilelines)
         {
             string lastline = null;
+            LineUnitAdded.AnonymousCounter = 0;
 
-            foreach(var logfileline in logfilelines)
+            foreach (var logfileline in logfilelines)
             {
                 if (string.IsNullOrEmpty(logfileline?.Trim()))
                     continue;
@@ -86,7 +87,43 @@ namespace ESOLogs
                 }
                 else if (logline is LineCombatEvent logLineCombatEvent)
                 {
-                    DoCombatEvent();
+                    if (logLineCombatEvent.CombatActionResult == ECombatActionResult.DIED)
+                    {
+                        DoDeathEvent();
+                    }
+                    else
+                    {
+                        DoCombatEvent();
+                    }
+
+                    void DoDeathEvent()
+                    {
+                        if (CurrentFightData == null)
+                        {
+                            return;
+                        }
+                        if (logLineCombatEvent.SourceUnitId == 0)
+                        {
+                            CountSourceIdZero++;
+                            return;
+                        }
+                        if (logLineCombatEvent.SourceUnitId == logLineCombatEvent.TargetUnitId)
+                        {
+                            return;
+                        }
+                        if (!Units.TryGetValue(logLineCombatEvent.TargetUnitId, out var target))
+                        {
+                            CountUnitNotFound++;
+                            return;
+                        }
+                        if (target.UnitType != EUnitType.PLAYER)
+                        {
+                            return;
+                        }
+                        var fighteventdata = CurrentFightData.GetFightEventData(target);
+                        fighteventdata.Deaths++;
+                    }
+
                     void DoCombatEvent()
                     {
                         if (logLineCombatEvent.SourceUnitId == 0)
@@ -134,23 +171,20 @@ namespace ESOLogs
                         CurrentFightData.LastDmgTS = logLineCombatEvent.TS;
 
                         logLineCombatEvent.SourceUnit = source;
+                        logLineCombatEvent.TargetUnit = target;
                         source.DamageDone += logLineCombatEvent.HitValue;
-                        int dmginfight = 0;
-                        CurrentFightData.DamageDone.TryGetValue(source, out dmginfight);
-                        CurrentFightData.DamageDone[source] = dmginfight + logLineCombatEvent.HitValue;
+                        target.DamageReceived += logLineCombatEvent.HitValue;
+                        var fighteventdataforsource = CurrentFightData.GetFightEventData(source);
+                        var fighteventdatafortarget = CurrentFightData.GetFightEventData(target);
+                        fighteventdataforsource.DamageDone += logLineCombatEvent.HitValue;
+                        fighteventdatafortarget.DamageReceived += logLineCombatEvent.HitValue; ;
+                        
                         if (source.OwnerUnit != null)
                         {
                             source.OwnerUnit.DamageDone += logLineCombatEvent.HitValue;
-                            dmginfight = 0;
-                            CurrentFightData.DamageDone.TryGetValue(source.OwnerUnit, out dmginfight);
-                            CurrentFightData.DamageDone[source.OwnerUnit] = dmginfight + logLineCombatEvent.HitValue;
+                            var fighteventdataforownedunit = CurrentFightData.GetFightEventData(source.OwnerUnit);
+                            fighteventdataforownedunit.DamageDone += logLineCombatEvent.HitValue;
                         }
-
-                        logLineCombatEvent.TargetUnit = target;
-                        target.DamageReceived += logLineCombatEvent.HitValue;
-                        dmginfight = 0;
-                        CurrentFightData.DamageReceived.TryGetValue(target, out dmginfight);
-                        CurrentFightData.DamageReceived[target] = dmginfight + logLineCombatEvent.HitValue;
                     }
                 }
                 else if (logline is LineBeginCombat logLineBeginCombat)
@@ -204,6 +238,13 @@ namespace ESOLogs
         }
     }
 
+    public class FightEventData
+    {
+        public int DamageDone;
+        public int DamageReceived;
+        public int Deaths;
+    }
+
     public class FightData
     {
         public DateTime Started = DateTime.MinValue;
@@ -216,9 +257,18 @@ namespace ESOLogs
         public bool IsBossFight;
         public string BossName;
         public string ZoneName;
-        public Dictionary<Unit, int> DamageDone = new Dictionary<Unit, int>();
-        public Dictionary<Unit, int> DamageReceived = new Dictionary<Unit, int>();
+        public Dictionary<Unit, FightEventData> FightEvents = new();
         public double DurationInSeconds { get; private set; }
+
+        public FightEventData GetFightEventData(Unit unit)
+        {
+            if (!FightEvents.TryGetValue(unit, out var fighteventdata))
+            {
+                fighteventdata = new FightEventData();
+                FightEvents[unit] = fighteventdata;
+            }
+            return fighteventdata;
+        }
 
         public FightData(DateTime logstarted, long startedts, string zonename)
         {
@@ -249,8 +299,8 @@ namespace ESOLogs
                 }
             }
             DurationInSeconds = (Ended - Started).TotalSeconds;
-            var boss = DamageReceived
-                .Where(x => x.Key.IsBoss && x.Value > 0)
+            var boss = FightEvents
+                .Where(x => x.Key.IsBoss && x.Value.DamageReceived > 0)
                 .Select(x => x.Key)
                 .FirstOrDefault();
             if (boss == null) return;
@@ -297,6 +347,7 @@ namespace ESOLogs
 
     public class LineUnitAdded : LogLine
     {
+        public static int AnonymousCounter { get; set; }
         public int UnitId { get; set; }
         public Unit Unit { get; set; }
         public override bool Read(string[] line)
@@ -321,8 +372,15 @@ namespace ESOLogs
                 OwnerUnitId = int.Parse(line[15]),
             };
             Unit.IsLocalPlayer = line[4] == "T" && Unit.UnitType == EUnitType.PLAYER;
-            if (Unit.Name == "") Unit.Name = "?";
-            if (Unit.DisplayName == "") Unit.DisplayName = "?";
+            if (Unit.Name == "")
+            {
+                AnonymousCounter++;
+                Unit.Name = $"???_{AnonymousCounter}";
+            }
+            if (Unit.DisplayName == "")
+            {
+                Unit.DisplayName = Unit.Name;
+            }
             return true;
         }
     }
@@ -357,6 +415,7 @@ namespace ESOLogs
             base.Read(line);
             if (!Enum.TryParse(line[2], out ECombatActionResult act))
                 return false;
+            CombatActionResult = act;
             HitValue = int.Parse(line[5]);
             Overflow = int.Parse(line[6]);
             AbilityId = int.Parse(line[8]);

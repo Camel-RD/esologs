@@ -90,23 +90,43 @@ namespace ESOLogs
 
         void WriteReportLines(List<ReportLine> lines, int totaldmg, double duration)
         {
-            var rowtotal = new ReportLine("TOTAL", totaldmg, totaldmg, duration);
-            var lines2 = lines.Concat([rowtotal]).ToList();
+            var totaldeathcount = lines.Sum(x => x.Deaths);
+            var rowtitle = new ReportLine()
+            {
+                Name = "Player ID",
+                SDmg = "DMG",
+                SDps = "DPS",
+                SPercent = "(%)",
+                SDeaths = "DEATHS"
+            };
+            var rowtotal = new ReportLine("TOTAL", totaldmg, totaldmg, duration, totaldeathcount);
+            var lines2 = lines.Concat([rowtotal, rowtitle]).ToList();
             int namecolumnwidth = lines2.Select(x => x.Name.Length).Max();
             int totaldmgcolumnwidth = lines2.Select(x => x.SDmg.Length).Max() + 2;
             int dpscolumnwidth = lines2.Select(x => x.SDps.Length).Max() + 2;
             int percentcolumnwidth = lines2.Select(x => x.SPercent.Length).Max() + 2;
+            int deathsolumnwidth = lines2.Select(x => x.SDeaths.Length).Max() + 2;
+
+            WriteOutBoldText(rowtitle.Name.PadRight(namecolumnwidth));
+            WriteOutBoldText(rowtitle.SDmg.PadLeft(totaldmgcolumnwidth));
+            WriteOutBoldText(rowtitle.SDps.PadLeft(dpscolumnwidth));
+            WriteOutBoldText(rowtitle.SPercent.PadLeft(percentcolumnwidth));
+            WriteOutBoldText(rowtitle.SDeaths.PadLeft(deathsolumnwidth) + "\r\n");
+
             foreach (var line in lines)
             {
                 WriteOutColoredBoldText(line.Name.PadRight(namecolumnwidth), Color.Beige);
                 tbOut.AppendText(line.SDmg.PadLeft(totaldmgcolumnwidth));
                 tbOut.AppendText(line.SDps.PadLeft(dpscolumnwidth));
-                tbOut.AppendText(line.SPercent.PadLeft(percentcolumnwidth) + "\r\n");
+                tbOut.AppendText(line.SPercent.PadLeft(percentcolumnwidth));
+                tbOut.AppendText(line.SDeaths.PadLeft(deathsolumnwidth) + "\r\n");
             }
+
             WriteOutColoredBoldText("TOTAL".PadRight(namecolumnwidth), Color.Beige);
             WriteOutBoldText(rowtotal.SDmg.PadLeft(totaldmgcolumnwidth));
             WriteOutBoldText(rowtotal.SDps.PadLeft(dpscolumnwidth));
-            WriteOutBoldText("100.00%".PadLeft(percentcolumnwidth) + "\r\n");
+            WriteOutBoldText("100.00%".PadLeft(percentcolumnwidth));
+            WriteOutBoldText(rowtotal.SDeaths.PadLeft(deathsolumnwidth) + "\r\n");
         }
 
         class ReportLine
@@ -114,11 +134,14 @@ namespace ESOLogs
             public string Name;
             public int Dmg;
             public double Percent;
+            public int Deaths;
             public string SDmg;
             public string SDps;
             public string SPercent;
+            public string SDeaths;
 
-            public ReportLine(string name, int dmg, int totaldmg, double duration)
+            public ReportLine() { }
+            public ReportLine(string name, int dmg, int totaldmg, double duration, int deaths)
             {
                 Name = name;
                 Dmg = dmg;
@@ -127,6 +150,8 @@ namespace ESOLogs
                 SDmg = FormatDMG(Dmg);
                 SDps = $"{dps:F1}k";
                 SPercent = $"{perc:F2}%";
+                Deaths = deaths;
+                SDeaths = Deaths.ToString();
             }
         }
 
@@ -145,13 +170,14 @@ namespace ESOLogs
 
                 foreach (var fight in bossfights)
                 {
-                    totaldmg = fight.DamageDone
+                    totaldmg = fight.FightEvents
                         .Where(x => x.Key.UnitType == EUnitType.PLAYER)
-                        .Sum(x => x.Value);
-                    var bfrows = fight.DamageDone
+                        .Sum(x => x.Value.DamageDone);
+                    var bfrows = fight.FightEvents
                         .Where(x => x.Key.UnitType == EUnitType.PLAYER)
-                        .OrderByDescending(x => x.Value)
-                        .Select(x => new ReportLine(x.Key.DisplayName, x.Value, totaldmg, fight.DurationInSeconds))
+                        .OrderByDescending(x => x.Value.DamageDone)
+                        .Select(x => new ReportLine(x.Key.DisplayName, x.Value.DamageDone, 
+                            totaldmg, fight.DurationInSeconds, x.Value.Deaths))
                         .ToList();
                     WriteReportFightHeader(fight.ZoneName, fight.BossName, totaldmg, fight.DurationInSeconds);
                     WriteReportFightStartEndTime(fight.Started, fight.Ended, fight.DurationInSeconds);
@@ -160,35 +186,43 @@ namespace ESOLogs
                 }
 
                 totaldmg = trashfights
-                    .SelectMany(x => x.DamageDone)
+                    .SelectMany(x => x.FightEvents)
                     .Where(x => x.Key.UnitType == EUnitType.PLAYER)
-                    .Sum(x => x.Value);
+                    .Sum(x => x.Value.DamageDone);
                 var totalduration = trashfights
                     .Sum(x => x.DurationInSeconds);
-                var trrows = trashfights.SelectMany(x => x.DamageDone)
+                var trrows = trashfights.SelectMany(x => x.FightEvents)
                     .Where(x => x.Key.UnitType == EUnitType.PLAYER)
                     .GroupBy(x => x.Key)
-                    .Select(x => (unit: x.Key, dmg: x.Sum(x => x.Value)))
+                    .Select(x => (
+                        unit: x.Key, 
+                        dmg: x.Sum(x => x.Value.DamageDone),
+                        deaths: x.Sum(x => x.Value.Deaths)))
                     .OrderByDescending(x => x.dmg)
-                    .Select(x => new ReportLine(x.unit.DisplayName, x.dmg, totaldmg, totalduration))
+                    .Select(x => new ReportLine(x.unit.DisplayName, x.dmg, totaldmg, 
+                        totalduration, x.deaths))
                     .ToList();
                 WriteReportFightHeader(grzone.Key, "TRASH", totaldmg, totalduration);
                 WriteReportLines(trrows, totaldmg, totalduration);
                 tbOut.AppendText("\r\n");
 
                 totaldmg = grzone
-                    .SelectMany(x => x.DamageDone)
+                    .SelectMany(x => x.FightEvents)
                     .Where(x => x.Key.UnitType == EUnitType.PLAYER)
-                    .Sum(x => x.Value);
+                    .Sum(x => x.Value.DamageDone);
                 totalduration = grzone
                     .Sum(x => x.DurationInSeconds);
                 var trows = grzone
-                    .SelectMany(x => x.DamageDone)
+                    .SelectMany(x => x.FightEvents)
                     .Where(x => x.Key.UnitType == EUnitType.PLAYER)
                     .GroupBy(x => x.Key)
-                    .Select(x => (unit: x.Key, dmg: x.Sum(x => x.Value)))
+                    .Select(x => (
+                        unit: x.Key, 
+                        dmg: x.Sum(x => x.Value.DamageDone),
+                        deaths: x.Sum(x => x.Value.Deaths)))
                     .OrderByDescending(x => x.dmg)
-                    .Select(x => new ReportLine(x.unit.DisplayName, x.dmg, totaldmg, totalduration))
+                    .Select(x => new ReportLine(x.unit.DisplayName, x.dmg, totaldmg, 
+                        totalduration, x.deaths))
                     .ToList();
                 WriteReportFightHeader(grzone.Key, "TOTAL", totaldmg, totalduration);
                 WriteReportLines(trows, totaldmg, totalduration);
