@@ -129,6 +129,40 @@ namespace ESOLogs
             WriteOutBoldText(rowtotal.SDeaths.PadLeft(deathsolumnwidth) + "\r\n");
         }
 
+        void WriteDelugeReport(FightData fightdata)
+        {
+            if (fightdata?.DelugeTracker == null || fightdata?.DelugeTracker.Data.Count == 0)
+                return;
+            var bombers = fightdata.DelugeTracker.Data
+                .Where(x => x.Value.CountWasNotInWater > 0)
+                .Select(x => (unit: GetById(x.Key), count: x.Value.CountWasNotInWater))
+                .Where(x => x.unit != null)
+                .OrderByDescending(x => x.count)
+                .Select(x => (name: x.unit.DisplayName, scount: x.count.ToString()))
+                .ToList();
+
+            if (bombers.Count == 0) return;
+
+            int namecolumnwidth = bombers.Select(x => x.name.Length).Max();
+            int countcolumnwidth = bombers.Select(x => x.scount.Length).Max() + 2;
+
+            WriteOutColoredBoldText(fightdata.ZoneName, Color.Pink);
+            tbOut.AppendText(", ");
+            WriteOutColoredBoldText("Deluge bombers\r\n", Color.Yellow);
+
+            foreach (var bomber in bombers)
+            {
+                WriteOutColoredBoldText(bomber.name.PadRight(namecolumnwidth), Color.Beige);
+                tbOut.AppendText(bomber.scount.PadLeft(countcolumnwidth) + "\r\n");
+            }
+            tbOut.AppendText("\r\n");
+
+            Unit GetById(int id)
+            {
+                return fightdata.FightEvents.Keys.Where(x => x.Id == id).FirstOrDefault();
+            }
+        }
+
         class ReportLine
         {
             public string Name;
@@ -183,6 +217,9 @@ namespace ESOLogs
                     WriteReportFightStartEndTime(fight.Started, fight.Ended, fight.DurationInSeconds);
                     WriteReportLines(bfrows, totaldmg, fight.DurationInSeconds);
                     tbOut.AppendText("\r\n");
+
+                    if (fight.DelugeTracker != null)
+                        WriteDelugeReport(fight);
                 }
 
                 totaldmg = trashfights
@@ -300,6 +337,7 @@ namespace ESOLogs
             try
             {
                 File.WriteAllText(logfilename, string.Empty);
+                MessageBox.Show("Done!", "", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception)
             {

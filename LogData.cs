@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Reflection.Metadata.Ecma335;
+using System.Drawing.Drawing2D;
 
 namespace ESOLogs
 {
@@ -54,6 +55,9 @@ namespace ESOLogs
                     continue;
                 lastline = logfileline;
                 var lineparts = logfileline.Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+                CurrentFightData?.TestForDelugeEvent(lineparts);
+
                 if (!Enum.TryParse(lineparts[1], out ELineType linetype))
                     continue;
 
@@ -238,6 +242,7 @@ namespace ESOLogs
         }
     }
 
+
     public class FightEventData
     {
         public int DamageDone;
@@ -259,6 +264,7 @@ namespace ESOLogs
         public string ZoneName;
         public Dictionary<Unit, FightEventData> FightEvents = new();
         public double DurationInSeconds { get; private set; }
+        public DelugeTracker DelugeTracker = null;
 
         public FightEventData GetFightEventData(Unit unit)
         {
@@ -276,6 +282,10 @@ namespace ESOLogs
             StartedTS = startedts;
             Started = LogStarted.AddMilliseconds(startedts);
             ZoneName = zonename;
+            if (zonename == "Dreadsail Reef")
+            {
+                DelugeTracker = new();
+            }
         }
 
         public void Check()
@@ -306,6 +316,11 @@ namespace ESOLogs
             if (boss == null) return;
             IsBossFight = true;
             BossName = boss.Name;
+        }
+
+        public void TestForDelugeEvent(string[] line)
+        {
+            DelugeTracker?.TestEvent(line);
         }
     }
 
@@ -375,7 +390,10 @@ namespace ESOLogs
             if (Unit.Name == "")
             {
                 AnonymousCounter++;
-                Unit.Name = $"???_{AnonymousCounter}";
+                if (Unit.Level < 50)
+                    Unit.Name = $"?_{AnonymousCounter}_lvl{Unit.Level}";
+                else
+                    Unit.Name = $"?_{AnonymousCounter}_cp{Unit.championPoints}";
             }
             if (Unit.DisplayName == "")
             {
