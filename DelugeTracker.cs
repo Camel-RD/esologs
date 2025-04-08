@@ -26,6 +26,18 @@ namespace ESOLogs
     public class DelugeTracker()
     {
         public Dictionary<int, DelugeTrackerData> Data = new();
+        
+        public void TestEvent(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) return;
+            var rtx = LogLine.ReadLineHeader(line);
+            if (!rtx.rt) return;
+            if (rtx.tp != ELineType.EFFECT_CHANGED &&
+                rtx.tp != ELineType.COMBAT_EVENT) return;
+            var parts = line.Split(',');
+            TestEvent(parts);
+        }
+
         public void TestEvent(string[] line)
         {
             var eventtype = line[1];

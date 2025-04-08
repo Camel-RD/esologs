@@ -12,6 +12,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="data_abilities.txt" />
+    <None Remove="data_sets.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="data_sets.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="Pics\esologs.ico" />
   </ItemGroup>
 

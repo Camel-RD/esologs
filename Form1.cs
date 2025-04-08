@@ -10,7 +10,7 @@ using System.Xml.Linq;
 
 namespace ESOLogs
 {
-    public partial class Form1 : Form
+    public partial class Form1 : Form, IForm2
     {
         public Form1()
         {
@@ -32,14 +32,16 @@ namespace ESOLogs
         Font Defaultfont;
         Font Boldfont;
 
-        void WriteOutBoldText(string text)
+        public void WriteOutText(string text) => tbOut.AppendText(text);
+
+        public void WriteOutBoldText(string text)
         {
             tbOut.SelectionFont = Boldfont;
             tbOut.AppendText(text);
             tbOut.SelectionFont = Defaultfont;
         }
 
-        void WriteOutColoredText(string text, Color color)
+        public void WriteOutColoredText(string text, Color color)
         {
             var c = tbOut.SelectionColor;
             tbOut.SelectionColor = color;
@@ -47,7 +49,7 @@ namespace ESOLogs
             tbOut.SelectionColor = c;
         }
 
-        void WriteOutColoredBoldText(string text, Color color)
+        public void WriteOutColoredBoldText(string text, Color color)
         {
             var c = tbOut.SelectionColor;
             tbOut.SelectionColor = color;
@@ -57,7 +59,7 @@ namespace ESOLogs
             tbOut.SelectionFont = Defaultfont;
         }
 
-        string FormatDuration(double seconds)
+        public string FormatDuration(double seconds)
         {
             var ts = new TimeSpan(0, 0, (int)seconds);
             if (ts.Hours > 1)
@@ -65,13 +67,43 @@ namespace ESOLogs
             return $"{ts.Minutes:00}:{ts.Seconds:00}";
         }
 
-        public static string FormatDMG(int dmg)
+        void IForm2.WriteOutText(string text) => tbPlayerData.AppendText(text);
+
+        void IForm2.WriteOutBoldText(string text)
+        {
+            tbPlayerData.SelectionFont = Boldfont;
+            tbPlayerData.AppendText(text);
+            tbPlayerData.SelectionFont = Defaultfont;
+        }
+
+        void IForm2.WriteOutColoredText(string text, Color color)
+        {
+            var c = tbPlayerData.SelectionColor;
+            tbPlayerData.SelectionColor = color;
+            tbPlayerData.AppendText(text);
+            tbPlayerData.SelectionColor = c;
+        }
+
+        void IForm2.WriteOutColoredBoldText(string text, Color color)
+        {
+            var c = tbPlayerData.SelectionColor;
+            tbPlayerData.SelectionColor = color;
+            tbPlayerData.SelectionFont = Boldfont;
+            tbPlayerData.AppendText(text);
+            tbPlayerData.SelectionColor = c;
+            tbPlayerData.SelectionFont = Defaultfont;
+        }
+
+
+        public static string FormatDMG2(int dmg)
         {
             var sdmg = dmg > 1000000 ?
                 $"{(dmg / 1000000d):N2}M" :
                 $"{(dmg / 1000d):N2}K";
             return sdmg;
         }
+
+        public string FormatDMG(int dmg) => FormatDMG2(dmg);
 
         void WriteReportFightHeader(string zonename, string bossname, int totaldmg, double duration)
         {
@@ -181,7 +213,7 @@ namespace ESOLogs
                 Dmg = dmg;
                 var dps = Math.Round((double)Dmg / duration / 1000d, 1);
                 var perc = Math.Round((double)Dmg / (double)totaldmg * 100d, 2);
-                SDmg = FormatDMG(Dmg);
+                SDmg = FormatDMG2(Dmg);
                 SDps = $"{dps:F1}k";
                 SPercent = $"{perc:F2}%";
                 Deaths = deaths;
@@ -210,7 +242,7 @@ namespace ESOLogs
                     var bfrows = fight.FightEvents
                         .Where(x => x.Key.UnitType == EUnitType.PLAYER)
                         .OrderByDescending(x => x.Value.DamageDone)
-                        .Select(x => new ReportLine(x.Key.DisplayName, x.Value.DamageDone, 
+                        .Select(x => new ReportLine(x.Key.DisplayName, x.Value.DamageDone,
                             totaldmg, fight.DurationInSeconds, x.Value.Deaths))
                         .ToList();
                     WriteReportFightHeader(fight.ZoneName, fight.BossName, totaldmg, fight.DurationInSeconds);
@@ -222,26 +254,30 @@ namespace ESOLogs
                         WriteDelugeReport(fight);
                 }
 
-                totaldmg = trashfights
-                    .SelectMany(x => x.FightEvents)
-                    .Where(x => x.Key.UnitType == EUnitType.PLAYER)
-                    .Sum(x => x.Value.DamageDone);
-                var totalduration = trashfights
-                    .Sum(x => x.DurationInSeconds);
-                var trrows = trashfights.SelectMany(x => x.FightEvents)
-                    .Where(x => x.Key.UnitType == EUnitType.PLAYER)
-                    .GroupBy(x => x.Key)
-                    .Select(x => (
-                        unit: x.Key, 
-                        dmg: x.Sum(x => x.Value.DamageDone),
-                        deaths: x.Sum(x => x.Value.Deaths)))
-                    .OrderByDescending(x => x.dmg)
-                    .Select(x => new ReportLine(x.unit.DisplayName, x.dmg, totaldmg, 
-                        totalduration, x.deaths))
-                    .ToList();
-                WriteReportFightHeader(grzone.Key, "TRASH", totaldmg, totalduration);
-                WriteReportLines(trrows, totaldmg, totalduration);
-                tbOut.AppendText("\r\n");
+                double totalduration;
+                if (trashfights.Count > 0)
+                {
+                    totaldmg = trashfights
+                        .SelectMany(x => x.FightEvents)
+                        .Where(x => x.Key.UnitType == EUnitType.PLAYER)
+                        .Sum(x => x.Value.DamageDone);
+                    totalduration = trashfights
+                        .Sum(x => x.DurationInSeconds);
+                    var trrows = trashfights.SelectMany(x => x.FightEvents)
+                        .Where(x => x.Key.UnitType == EUnitType.PLAYER)
+                        .GroupBy(x => x.Key)
+                        .Select(x => (
+                            unit: x.Key,
+                            dmg: x.Sum(x => x.Value.DamageDone),
+                            deaths: x.Sum(x => x.Value.Deaths)))
+                        .OrderByDescending(x => x.dmg)
+                        .Select(x => new ReportLine(x.unit.DisplayName, x.dmg, totaldmg,
+                            totalduration, x.deaths))
+                        .ToList();
+                    WriteReportFightHeader(grzone.Key, "TRASH", totaldmg, totalduration);
+                    WriteReportLines(trrows, totaldmg, totalduration);
+                    tbOut.AppendText("\r\n");
+                }
 
                 totaldmg = grzone
                     .SelectMany(x => x.FightEvents)
@@ -254,17 +290,25 @@ namespace ESOLogs
                     .Where(x => x.Key.UnitType == EUnitType.PLAYER)
                     .GroupBy(x => x.Key)
                     .Select(x => (
-                        unit: x.Key, 
+                        unit: x.Key,
                         dmg: x.Sum(x => x.Value.DamageDone),
                         deaths: x.Sum(x => x.Value.Deaths)))
                     .OrderByDescending(x => x.dmg)
-                    .Select(x => new ReportLine(x.unit.DisplayName, x.dmg, totaldmg, 
+                    .Select(x => new ReportLine(x.unit.DisplayName, x.dmg, totaldmg,
                         totalduration, x.deaths))
                     .ToList();
                 WriteReportFightHeader(grzone.Key, "TOTAL", totaldmg, totalduration);
                 WriteReportLines(trows, totaldmg, totalduration);
                 tbOut.AppendText("\r\n");
             }
+
+            foreach (var unit in logdata.Units.Values.Where(x => x.UnitType == EUnitType.PLAYER))
+            {
+                unit.MakeReportPart(this);
+            }
+            tbPlayerData.SelectionStart = 0;
+            //tbPlayerData.SelectionLength = 1;
+            //tbPlayerData.SelectionLength = 0;
         }
 
         private void tsiRead_Click(object sender, EventArgs e)
@@ -304,7 +348,7 @@ namespace ESOLogs
             var fd = new OpenFileDialog()
             {
                 InitialDirectory = pt2,
-                Filter = "XML files (*.log)|*.log",
+                Filter = "log files (*.log)|*.log",
                 Title = "Select encounter log file"
             };
             var rt = fd.ShowDialog(this);
@@ -345,6 +389,17 @@ namespace ESOLogs
             }
         }
 
+        private void tsiFights_Click(object sender, EventArgs e)
+        {
+            tsiViewSelector.Text = "Fights";
+            tcPages.SelectedTab = tpFights;
+        }
+
+        private void tsiPlayers_Click(object sender, EventArgs e)
+        {
+            tsiViewSelector.Text = "Players";
+            tcPages.SelectedTab = tpPlayers;
+        }
     }
 }
 
