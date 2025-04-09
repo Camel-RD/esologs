@@ -543,7 +543,7 @@
 621 = Glacial Guardian
 622 = Turning Tide
 623 = Storm-Cursed's Revenge
-624 = Spriggan\’s Vigor
+624 = Spriggan’s Vigor
 625 = Markyn Ring of Majesty
 626 = Belharza's Band
 627 = Spaulder of Ruin
@@ -584,7 +584,7 @@
 667 = Euphotic Gatekeeper
 668 = Langour of Peryite
 669 = Nocturnal's Ploy 
-670 = Mara\’s Balm
+670 = Mara’s Balm
 671 = Back-Alley Gourmand
 672 = Phoenix Moth Theurge
 673 = Bastion of Draoife
@@ -598,7 +598,7 @@
 681 = Nix-Hound's Howl
 682 = Telvanni Enforcer
 683 = Roksa the Warped
-684 = Runecarver\’s Blaze
+684 = Runecarver’s Blaze
 685 = Apocryphal Inspiration
 686 = Abyssal Brace
 687 = Ozezan the Inferno
@@ -670,7 +670,7 @@
 781 = Aerie's Cry
 782 = Tracker's Lash
 783 = Shared Pain
-784 = Siegemaster'\s Focus
+784 = Siegemaster's Focus
 791 = Bulwark Ruination
 792 = Farstrider
 793 = Netch Oil

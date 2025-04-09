@@ -247,7 +247,22 @@ namespace ESOLogs
                 {
                     if (Units.TryGetValue(linePlayerInfo.UnitId, out var unit))
                     {
-                        unit.PlayerInfoData.Add(linePlayerInfo);
+                        if (unit.PlayerInfoData.Count == 0)
+                        {
+                            unit.PlayerInfoData.Add(linePlayerInfo);
+                        }
+                        else
+                        {
+                            var last_pi = unit.PlayerInfoData[unit.PlayerInfoData.Count - 1];
+                            if (linePlayerInfo.TS - last_pi.TS < 5000)
+                            {
+                                unit.PlayerInfoData[unit.PlayerInfoData.Count - 1] = linePlayerInfo;
+                            }
+                            else
+                            {
+                                unit.PlayerInfoData.Add(linePlayerInfo);
+                            }
+                        }
                     }
                 }
             }
@@ -627,6 +642,11 @@ namespace ESOLogs
             {
                 var eq = equipmentsets.Find(x => x.Equals(data.EquipmentInfo));
                 if (eq != null) continue;
+                if (equipmentsets.Count == 2)
+                {
+                    var b = data.EquipmentInfo.Equals(equipmentsets[0]);
+                    b = data.EquipmentInfo.Equals(equipmentsets[1]);
+                }
                 equipmentsets.Add(data.EquipmentInfo);
             }
             foreach (var data in PlayerInfoData)
@@ -695,6 +715,7 @@ namespace ESOLogs
             "Neck", "Ring1", "Ring2", "Main hand", "Backup hand"];
 
         public EquipmentSlot? Slot { get; set; }
+        public string SlotName => Slot == null ? "none" : EquipmentSlotNames[(int)Slot];
         public int SetId { get; set; }
         public string SetName { get; set; }
         public string Trait { get; set; }
@@ -732,8 +753,7 @@ namespace ESOLogs
 
         public void MkaeReportLine(IForm2 formtools)
         {
-            string slot = Slot == null ? "none" : EquipmentSlotNames[(int)Slot];
-            formtools.WriteOutColoredText($"    {slot}, ", Color.Yellow);
+            formtools.WriteOutColoredText($"    {SlotName}, ", Color.Yellow);
             formtools.WriteOutColoredText($"{SetName}, ", Color.Beige);
             formtools.WriteOutText($"{Trait}, {EnchantType.Replace("_", " ")}\r\n");
         }
@@ -781,7 +801,8 @@ namespace ESOLogs
                 var o2 = obj.EquipmentPieces[i];
                 if (o1 == null && o2 != null) return false;
                 if (o1 != null && o2 == null) return false;
-                if (!o1.Equals(o2)) return false;
+                if (!o1.Equals(o2)) 
+                    return false;
             }
             return true;
         }
@@ -807,9 +828,16 @@ namespace ESOLogs
         public void MkaeReportPart(IForm2 formtools, int k)
         {
             formtools.WriteOutColoredText($"Equipment set {k}:\r\n", Color.GreenYellow);
-            foreach(var eq in EquipmentPieces)
+            int colw_slotname = EquipmentPieces.Select(x => x.SlotName.Length).Max() + 1;
+            int colw_setname = EquipmentPieces.Select(x => x.SetName?.Length ?? 0).Max() + 1;
+            int colw_traitname = EquipmentPieces.Select(x => x.Trait?.Length ?? 0).Max() + 1;
+            int colw_enchname = EquipmentPieces.Select(x => x.EnchantType?.Length ?? 0).Max() + 1;
+            foreach (var eq in EquipmentPieces)
             {
-                eq.MkaeReportLine(formtools);
+                formtools.WriteOutColoredText($"  {eq.SlotName?.PadRight(colw_slotname)}", Color.Yellow);
+                formtools.WriteOutColoredText($"{eq.SetName?.PadRight(colw_setname)}", Color.Beige);
+                formtools.WriteOutText($"{eq.Trait?.PadRight(colw_traitname)}{eq.EnchantType?.Replace("_", " ")?.PadRight(colw_enchname)}\r\n");
+                //eq.MkaeReportLine(formtools);
             }
         }
     }

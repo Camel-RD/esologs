@@ -26,6 +26,7 @@ namespace ESOLogs
                 Config.WriteXml();
             }
             tbFileName.Text = Config.LogFileName;
+            tsiPlayerList.Visible = false;
         }
 
         Config Config = null;
@@ -226,6 +227,7 @@ namespace ESOLogs
             var logdata = new LogData();
             logdata.ReadFile(logfilename);
             tbOut.Clear();
+            tbPlayerData.Clear();
             if (logdata.FightData.Count == 0) return;
 
             foreach (var grzone in logdata.FightData.GroupBy(x => x.ZoneName))
@@ -302,13 +304,50 @@ namespace ESOLogs
                 tbOut.AppendText("\r\n");
             }
 
+            //prepare player data report view
+            PalyerDataStartPositions.Clear();
             foreach (var unit in logdata.Units.Values.Where(x => x.UnitType == EUnitType.PLAYER))
             {
+                PalyerDataStartPositions[unit.DisplayName] = tbPlayerData.TextLength;
                 unit.MakeReportPart(this);
             }
             tbPlayerData.SelectionStart = 0;
-            //tbPlayerData.SelectionLength = 1;
-            //tbPlayerData.SelectionLength = 0;
+            PrepareDropDown();
+        }
+
+        Dictionary<string, int> PalyerDataStartPositions = new();
+
+        void PrepareDropDown()
+        {
+            tsiPlayerList.DropDownItems.Clear();
+            foreach(var pd in PalyerDataStartPositions)
+            {
+                tsiPlayerList.DropDownItems.Add(pd.Key, null, tsiPlayerList_ItemClick);
+            }
+        }
+
+        void tsiPlayerList_ItemClick(object sender, EventArgs e)
+        {
+            var tsi = sender as ToolStripItem;
+            var playerid = tsi.Text;
+            if (!PalyerDataStartPositions.TryGetValue(playerid, out int pos)) return;
+            tbPlayerData.SelectionLength = 0;
+            tbPlayerData.SelectionStart = 0;
+            pos = tbPlayerDataSkipLines(pos, 12);
+            tbPlayerData.SelectionStart = pos;
+        }
+
+        int tbPlayerDataSkipLines(int startpos, int linescount)
+        {
+            if (tbPlayerData.TextLength < startpos) return startpos;
+            int pos = startpos;
+            for (int i = 0; i < linescount; i++)
+            {
+                int k = tbPlayerData.Text.IndexOf('\n', pos);
+                if (k == -1) return pos;
+                pos = k + 1;
+            }
+            return pos;
         }
 
         private void tsiRead_Click(object sender, EventArgs e)
@@ -393,12 +432,14 @@ namespace ESOLogs
         {
             tsiViewSelector.Text = "Fights";
             tcPages.SelectedTab = tpFights;
+            tsiPlayerList.Visible = false;
         }
 
         private void tsiPlayers_Click(object sender, EventArgs e)
         {
             tsiViewSelector.Text = "Players";
             tcPages.SelectedTab = tpPlayers;
+            tsiPlayerList.Visible = true;
         }
     }
 }
