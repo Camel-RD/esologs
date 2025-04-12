@@ -705,14 +705,14 @@ namespace ESOLogs
     public enum EquipmentSlot
     {
         HEAD, CHEST, SHOULDERS, WAIST, LEGS, FEET, HAND,
-        NECK, RING1, RING2, MAIN_HAND, BACKUP_MAIN
+        NECK, RING1, RING2, MAIN_HAND, OFF_HAND, BACKUP_MAIN, BACKUP_OFF
     }
 
     public class EquipmentPieceInfo
     {
         public static string[] EquipmentSlotNames = 
             ["Head", "Chest", "Shoulders", "Waist", "Legs", "Feet", "Hand",
-            "Neck", "Ring1", "Ring2", "Main hand", "Backup hand"];
+            "Neck", "Ring1", "Ring2", "Main hand", "Off hand", "Backup main", "Backup off"];
 
         public EquipmentSlot? Slot { get; set; }
         public string SlotName => Slot == null ? "none" : EquipmentSlotNames[(int)Slot];
@@ -761,7 +761,7 @@ namespace ESOLogs
 
     public class EquipmentInfo
     {
-        public EquipmentPieceInfo[] EquipmentPieces { get; private set; } = new EquipmentPieceInfo[12];
+        public EquipmentPieceInfo[] EquipmentPieces { get; private set; } = new EquipmentPieceInfo[14];
         public EquipmentPieceInfo Head => EquipmentPieces[(int)EquipmentSlot.HEAD];
         public EquipmentPieceInfo Chest => EquipmentPieces[(int)EquipmentSlot.CHEST];
         public EquipmentPieceInfo Shoulders => EquipmentPieces[(int)EquipmentSlot.SHOULDERS];
@@ -773,9 +773,11 @@ namespace ESOLogs
         public EquipmentPieceInfo Ring1 => EquipmentPieces[(int)EquipmentSlot.RING1];
         public EquipmentPieceInfo Ring2 => EquipmentPieces[(int)EquipmentSlot.RING2];
         public EquipmentPieceInfo MainHand => EquipmentPieces[(int)EquipmentSlot.MAIN_HAND];
-        public EquipmentPieceInfo BackupHand => EquipmentPieces[(int)EquipmentSlot.BACKUP_MAIN];
+        public EquipmentPieceInfo OffHand => EquipmentPieces[(int)EquipmentSlot.OFF_HAND];
+        public EquipmentPieceInfo BackupMain => EquipmentPieces[(int)EquipmentSlot.BACKUP_MAIN];
+        public EquipmentPieceInfo BackupOff => EquipmentPieces[(int)EquipmentSlot.BACKUP_OFF];
 
-        
+
         public EquipmentInfo()
         {
             for (int i = 0; i < EquipmentPieces.Length; i++)
@@ -834,6 +836,8 @@ namespace ESOLogs
             int colw_enchname = EquipmentPieces.Select(x => x.EnchantType?.Length ?? 0).Max() + 1;
             foreach (var eq in EquipmentPieces)
             {
+                if ((eq.Slot == EquipmentSlot.OFF_HAND || eq.Slot == EquipmentSlot.BACKUP_OFF) &&
+                    eq.SetName == "none") continue;
                 formtools.WriteOutColoredText($"  {eq.SlotName?.PadRight(colw_slotname)}", Color.Yellow);
                 formtools.WriteOutColoredText($"{eq.SetName?.PadRight(colw_setname)}", Color.Beige);
                 formtools.WriteOutText($"{eq.Trait?.PadRight(colw_traitname)}{eq.EnchantType?.Replace("_", " ")?.PadRight(colw_enchname)}\r\n");
